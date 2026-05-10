@@ -689,6 +689,14 @@ footer {
 .rv-d4 { transition-delay:.4s; }
 
 /* ══════════════════════════════════════
+   PAGE SWITCHING
+══════════════════════════════════════ */
+.page { display:none; }
+.page.active { display:block; animation:pageFade .55s ease; }
+@keyframes pageFade { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:none} }
+.nav-links a.pg-on { color:var(--warm) !important; }
+
+/* ══════════════════════════════════════
    RESPONSIVE
 ══════════════════════════════════════ */
 @media(max-width:1000px){
@@ -710,7 +718,7 @@ footer {
 
 <!-- ══════ NAV ══════ -->
 <nav id="nav">
-  <a href="#" class="logo">
+  <a href="#" onclick="showPage('home');return false" class="logo">
     <div class="logo-arc">
       <svg viewBox="0 0 26 26" fill="none">
         <path d="M13 24 A12 12 0 0 1 1 12" stroke="#c89060" stroke-width="1.2"/>
@@ -723,16 +731,18 @@ footer {
     <span class="logo-sub">Stargaze Research</span>
   </a>
   <ul class="nav-links">
-    <li><a href="#product">产品</a></li>
-    <li><a href="#architecture">架构</a></li>
-    <li><a href="#usecases">应用</a></li>
-    <li><a href="#team">团队</a></li>
-    <li><a href="#contact">合作</a></li>
+    <li><a href="#" data-page="product" onclick="showPage('product');return false">产品</a></li>
+    <li><a href="#" data-page="market"  onclick="showPage('market');return false">市场</a></li>
+    <li><a href="#" data-page="team"    onclick="showPage('team');return false">团队</a></li>
+    <li><a href="#" data-page="contact" onclick="showPage('contact');return false">合作</a></li>
   </ul>
-  <button class="nav-cta" onclick="document.getElementById('contact').scrollIntoView({behavior:'smooth'})">
+  <button class="nav-cta" onclick="showPage('contact')">
     预约演示
   </button>
 </nav>
+
+<!-- ══════════ PAGE: 首页 ══════════ -->
+<div class="page active" id="page-home">
 
 <!-- ══════ HERO ══════ -->
 <section id="hero">
@@ -764,8 +774,8 @@ footer {
       让运营方与公共治理决策者在执行前完成场景推演与策略评估。
     </p>
     <div class="hero-btns">
-      <a href="#product" class="btn-fill">查看产品</a>
-      <a href="#contact" class="btn-outline">洽谈合作</a>
+      <a href="#" onclick="showPage('product');return false" class="btn-fill">查看产品</a>
+      <a href="#" onclick="showPage('contact');return false" class="btn-outline">洽谈合作</a>
     </div>
   </div>
 
@@ -851,6 +861,11 @@ footer {
 </div>
 </div>
 </div>
+
+</div><!-- /page-home -->
+
+<!-- ══════════ PAGE: 产品 ══════════ -->
+<div class="page" id="page-product">
 
 <!-- ══════ PRODUCT ══════ -->
 <div id="product" class="section section-alt">
@@ -1040,6 +1055,11 @@ footer {
 </div>
 </div>
 
+</div><!-- /page-product -->
+
+<!-- ══════════ PAGE: 市场 ══════════ -->
+<div class="page" id="page-market">
+
 <!-- ══════ MARKET ══════ -->
 <div id="market">
 <div class="section">
@@ -1069,6 +1089,11 @@ footer {
 </div>
 </div>
 </div>
+
+</div><!-- /page-market -->
+
+<!-- ══════════ PAGE: 团队 ══════════ -->
+<div class="page" id="page-team">
 
 <!-- ══════ TEAM ══════ -->
 <div id="team" class="section section-alt">
@@ -1119,6 +1144,11 @@ footer {
 </div>
 </div>
 
+</div><!-- /page-team -->
+
+<!-- ══════════ PAGE: 合作 ══════════ -->
+<div class="page" id="page-contact">
+
 <!-- ══════ CONTACT ══════ -->
 <div id="contact">
 <div class="section">
@@ -1162,6 +1192,8 @@ footer {
 </div>
 </div>
 
+</div><!-- /page-contact -->
+
 <!-- ══════ FOOTER ══════ -->
 <footer>
   <div>© 2026 星纬智能 Stargaze Research · 认知型数字孪生平台</div>
@@ -1173,9 +1205,52 @@ footer {
      SCRIPTS
 ══════════════════════════════════════ -->
 <script>
+/* ════════════════════════════════
+   PAGE SWITCHING
+════════════════════════════════ */
+let _marketReady = false;
+
+function showPage(id) {
+  // hide all pages
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  // show target
+  const page = document.getElementById('page-' + id);
+  if(!page) return;
+  page.classList.add('active');
+  // scroll to top
+  window.scrollTo(0, 0);
+  // URL hash
+  history.pushState(null, '', id === 'home' ? location.pathname : '#' + id);
+  // nav active indicators
+  document.querySelectorAll('.nav-links a[data-page]').forEach(a => {
+    a.classList.toggle('pg-on', a.dataset.page === id);
+  });
+  // nav background: always ink except home-at-top
+  document.getElementById('nav').classList.toggle('ink', id !== 'home' || window.scrollY > 60);
+  // trigger scroll reveals for above-fold elements
+  setTimeout(() => {
+    page.querySelectorAll('.rv').forEach(el => {
+      const r = el.getBoundingClientRect();
+      if(r.top < window.innerHeight * 0.95) el.classList.add('on');
+    });
+  }, 60);
+  // lazy-init market canvas
+  if(id === 'market' && !_marketReady) {
+    _marketReady = true;
+    initMarketCanvas();
+  }
+}
+
+// back/forward browser buttons
+window.addEventListener('popstate', () => {
+  const h = location.hash.slice(1);
+  showPage(h || 'home');
+});
+
 /* ── NAV ink on scroll ── */
 window.addEventListener('scroll', () => {
-  document.getElementById('nav').classList.toggle('ink', window.scrollY > 60);
+  const isHome = document.getElementById('page-home').classList.contains('active');
+  document.getElementById('nav').classList.toggle('ink', !isHome || window.scrollY > 60);
 });
 
 /* ── Hero: parallax photo ── */
@@ -1288,8 +1363,8 @@ window.addEventListener('scroll', () => {
   resize(); draw();
 })();
 
-/* ── MARKET CANVAS: city-grid visualization ── */
-(function(){
+/* ── MARKET CANVAS: lazy init ── */
+function initMarketCanvas(){
   const cv = document.getElementById('market-canvas');
   if(!cv) return;
   const cx = cv.getContext('2d');
@@ -1365,7 +1440,7 @@ window.addEventListener('scroll', () => {
 
   window.addEventListener('resize',resize);
   resize(); draw();
-})();
+} /* end initMarketCanvas */
 
 /* ── Counter animation ── */
 function runCounters(){
@@ -1433,6 +1508,25 @@ function vswitch(btn, v){
       setTimeout(()=>el.style.textShadow='',60+Math.random()*100);
     }
   },700);
+})();
+
+/* ── INITIAL PAGE LOAD ── */
+(function(){
+  const h = location.hash.slice(1);
+  const valid = ['home','product','market','team','contact'];
+  const id = valid.includes(h) ? h : 'home';
+  // All pages start hidden except page-home (via HTML class active),
+  // so only override when hash points elsewhere
+  if(id !== 'home') showPage(id);
+  else {
+    // Trigger reveals for home above-fold elements
+    setTimeout(()=>{
+      document.querySelectorAll('#page-home .rv').forEach(el=>{
+        const r=el.getBoundingClientRect();
+        if(r.top < window.innerHeight*0.95) el.classList.add('on');
+      });
+    },120);
+  }
 })();
 </script>
 </body>
