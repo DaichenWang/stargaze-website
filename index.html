@@ -1369,12 +1369,15 @@ function initMarketCanvas(){
   if(!cv) return;
   const cx = cv.getContext('2d');
   let W, H, t=0;
+  const mouse = {x:-9999, y:-9999};
 
   const hR=[.12,.25,.40,.55,.68,.82,.92];
   const vR=[.1,.22,.36,.50,.65,.78,.90];
+
   const isects=[];
   for(const y of hR) for(const x of vR)
-    if(Math.random()<.55) isects.push({x,y,phase:Math.random()*Math.PI*2,cool:Math.random()<.2});
+    if(Math.random()<.55)
+      isects.push({x,y,phase:Math.random()*Math.PI*2,cool:Math.random()<.2, ox:0,oy:0});
 
   const flow=[];
   for(let i=0;i<32;i++){
@@ -1383,15 +1386,35 @@ function initMarketCanvas(){
       horiz,
       fixed: horiz?hR[Math.floor(Math.random()*hR.length)]:vR[Math.floor(Math.random()*vR.length)],
       pos:Math.random(), sp:(0.003+Math.random()*.005)*(Math.random()>.5?1:-1),
-      cool:Math.random()<.3
+      cool:Math.random()<.3, ox:0, oy:0
     });
   }
 
+  // big orb: animate scale-in on mouse enter
+  let orbScale = 0;
+
+  const REPEL_R  = 110;   // repulsion radius (px)
+  const REPEL_F  = 18;    // repulsion force
+  const DECAY    = 0.80;  // offset spring decay
+
   function resize(){W=cv.width=cv.offsetWidth;H=cv.height=cv.offsetHeight;}
+
+  function repel(px, py, ox, oy){
+    const dx = px - mouse.x, dy = py - mouse.y;
+    const d  = Math.sqrt(dx*dx + dy*dy);
+    if(d < REPEL_R && d > 0.5){
+      const f = (1 - d/REPEL_R) * REPEL_F;
+      ox += (dx/d)*f;
+      oy += (dy/d)*f;
+    }
+    return [ox*DECAY, oy*DECAY];
+  }
 
   function draw(){
     requestAnimationFrame(draw); t+=.012;
     cx.clearRect(0,0,W,H);
+
+    const hovering = mouse.x > 0;
 
     // micro grid
     cx.strokeStyle='rgba(200,144,96,.035)';cx.lineWidth=.5;
@@ -1408,36 +1431,83 @@ function initMarketCanvas(){
       cx.strokeStyle='rgba(200,144,96,.22)';cx.lineWidth=.8;cx.stroke();
     }
 
-    // intersections
+    // intersections (with repulsion offset)
     for(const n of isects){
       n.phase+=.025;
       const pulse=.5+.5*Math.sin(n.phase);
       const col=n.cool?'138,184,196':'200,144,96';
-      cx.beginPath();cx.arc(n.x*W,n.y*H,2+pulse*1.5,0,Math.PI*2);
+      const gx=n.x*W, gy=n.y*H;
+      [n.ox,n.oy] = repel(gx+n.ox, gy+n.oy, n.ox, n.oy);
+      const nx=gx+n.ox, ny=gy+n.oy;
+      cx.beginPath();cx.arc(nx,ny,2+pulse*1.5,0,Math.PI*2);
       cx.fillStyle=`rgba(${col},${.5+pulse*.4})`;cx.fill();
-      cx.beginPath();cx.arc(n.x*W,n.y*H,4+pulse*8,0,Math.PI*2);
+      cx.beginPath();cx.arc(nx,ny,4+pulse*8,0,Math.PI*2);
       cx.strokeStyle=`rgba(${col},${.06*(1-pulse)})`;cx.lineWidth=1;cx.stroke();
     }
 
-    // flow
+    // flow (with repulsion offset)
     for(const fp of flow){
       fp.pos+=fp.sp;
       if(fp.pos>1)fp.pos=0;if(fp.pos<0)fp.pos=1;
-      const x=fp.horiz?fp.pos*W:fp.fixed*W;
-      const y=fp.horiz?fp.fixed*H:fp.pos*H;
+      const gx=fp.horiz?fp.pos*W:fp.fixed*W;
+      const gy=fp.horiz?fp.fixed*H:fp.pos*H;
+      [fp.ox,fp.oy] = repel(gx+fp.ox, gy+fp.oy, fp.ox, fp.oy);
+      const x=gx+fp.ox, y=gy+fp.oy;
       const col=fp.cool?'138,184,196':'200,144,96';
       cx.beginPath();cx.arc(x,y,1.5,0,Math.PI*2);
       cx.fillStyle=`rgba(${col},.7)`;cx.fill();
     }
 
-    // scan
+    // scan line
     const sy=((t*22)%H);
     const sg=cx.createLinearGradient(0,sy-16,0,sy+2);
     sg.addColorStop(0,'rgba(200,144,96,0)');sg.addColorStop(1,'rgba(200,144,96,.04)');
     cx.fillStyle=sg;cx.fillRect(0,sy-16,W,18);
     cx.fillStyle='rgba(200,144,96,.15)';cx.fillRect(0,sy,W,1);
+
+    // ── large orb at mouse ──
+    orbScale += hovering ? (1 - orbScale) * 0.12 : (0 - orbScale) * 0.14;
+    if(orbScale > 0.01){
+      const mx=mouse.x, my=mouse.y;
+      const s=orbScale;
+      const breathing = 1 + 0.06*Math.sin(t*2.2);
+      const R = 23 * s * breathing;
+
+      // outer halo
+      const gHalo = cx.createRadialGradient(mx,my,0, mx,my,R*2.4);
+      gHalo.addColorStop(0,   `rgba(200,144,96,${0.18*s})`);
+      gHalo.addColorStop(0.5, `rgba(200,144,96,${0.06*s})`);
+      gHalo.addColorStop(1,   'rgba(200,144,96,0)');
+      cx.beginPath();cx.arc(mx,my,R*2.4,0,Math.PI*2);
+      cx.fillStyle=gHalo;cx.fill();
+
+      // mid ring (animated)
+      const ringR = R * (1 + 0.25*Math.sin(t*3));
+      cx.beginPath();cx.arc(mx,my,ringR,0,Math.PI*2);
+      cx.strokeStyle=`rgba(200,144,96,${0.28*s})`;cx.lineWidth=1;cx.stroke();
+
+      // inner glow body
+      const gBody = cx.createRadialGradient(mx,my,0, mx,my,R);
+      gBody.addColorStop(0,   `rgba(232,192,144,${0.92*s})`);
+      gBody.addColorStop(0.45,`rgba(200,144,96,${0.70*s})`);
+      gBody.addColorStop(1,   `rgba(200,100,40,${0.0})`);
+      cx.beginPath();cx.arc(mx,my,R,0,Math.PI*2);
+      cx.fillStyle=gBody;cx.fill();
+
+      // bright core
+      const gCore = cx.createRadialGradient(mx,my,0, mx,my,R*0.35);
+      gCore.addColorStop(0, `rgba(255,230,190,${s})`);
+      gCore.addColorStop(1, `rgba(232,192,144,0)`);
+      cx.beginPath();cx.arc(mx,my,R*0.35,0,Math.PI*2);
+      cx.fillStyle=gCore;cx.fill();
+    }
   }
 
+  cv.addEventListener('mousemove',e=>{
+    const r=cv.getBoundingClientRect();
+    mouse.x=e.clientX-r.left; mouse.y=e.clientY-r.top;
+  });
+  cv.addEventListener('mouseleave',()=>{mouse.x=-9999;mouse.y=-9999;});
   window.addEventListener('resize',resize);
   resize(); draw();
 } /* end initMarketCanvas */
